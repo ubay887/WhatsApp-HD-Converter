@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp HD Converter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-body: #0d0f14;
+            --bg-workspace: #13161e;
+            --bg-card: #1a1e28;
+            --bg-terminal: #0a0c10;
+            --border: #252a38;
+            --border-active: #4f6ef7;
+            --accent: #4f6ef7;
+            --accent-2: #7c3aed;
+            --green: #22c55e;
+            --green-dim: #16a34a;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --text-primary: #e8eaf0;
+            --text-secondary: #8892a4;
+            --text-dim: #4a5568;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-ui: 'DM Sans', system-ui, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background: var(--bg-body);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(79, 110, 247, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(124, 58, 237, 0.05) 0%, transparent 50%);
+        }
+
+        .workspace {
+            background: var(--bg-workspace);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow:
+                0 0 0 1px rgba(79,110,247,0.05),
+                0 32px 80px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+            width: 100%;
+            max-width: 800px;
+            padding: 36px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .workspace::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(79,110,247,0.4), rgba(124,58,237,0.4), transparent);
+        }
+
+        .title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            text-align: center;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .title::before, .title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ===== Upload Area ===== */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 52px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            background: var(--bg-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, rgba(79,110,247,0.04), transparent 70%);
+            pointer-events: none;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent);
+            background: #1d2233;
+        }
+
+        .upload-area.dragover {
+            border-color: var(--green);
+            background: rgba(34, 197, 94, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            display: block;
+            filter: grayscale(0.3);
+        }
+
+        .upload-text {
+            font-size: 15px;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .upload-hint {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            letter-spacing: 0.03em;
+        }
+
+        /* ===== File Info ===== */
+        .file-info {
+            display: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 16px;
+        }
+
+        .file-info.show { display: block; }
+
+        .file-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            word-break: break-all;
+            font-family: var(--font-mono);
+        }
+
+        .file-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .detail-item {
+            background: var(--bg-terminal);
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .detail-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            font-family: var(--font-mono);
+        }
+
+        .detail-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+            font-family: var(--font-mono);
+        }
+
+        /* ===== Video Info ===== */
+        .video-info {
+            display: none;
+            background: rgba(245, 158, 11, 0.06);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-top: 12px;
+        }
+
+        .video-info.show { display: block; }
+
+        .video-info-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--amber);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-family: var(--font-mono);
+        }
+
+        .video-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+
+        .video-info-item {
+            font-size: 12px;
+            color: rgba(245, 158, 11, 0.8);
+            font-family: var(--font-mono);
+        }
+
+        /* ===== Progress ===== */
+        .progress-container {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .progress-container.show { display: block; }
+
+        .progress-bar {
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid var(--border);
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; right: 0; bottom: 0;
+            width: 60px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25));
+            animation: shimmer 1.2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .progress-text {
+            margin-top: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            letter-spacing: 0.04em;
+        }
+
+        /* ===== Status Message ===== */
+        .status-message {
+            display: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 13px;
+            font-family: var(--font-mono);
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        .status-message.show { display: block; }
+
+        .status-message.info {
+            background: rgba(79, 110, 247, 0.1);
+            color: #93a8f8;
+            border: 1px solid rgba(79, 110, 247, 0.25);
+        }
+
+        .status-message.success {
+            background: rgba(34, 197, 94, 0.08);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.25);
+        }
+
+        .status-message.error {
+            background: rgba(239, 68, 68, 0.08);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        /* ===== FFmpeg Log (IMPROVED) ===== */
+        .ffmpeg-log {
+            display: none;
+            background: var(--bg-terminal);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-top: 14px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 12px rgba(0,0,0,0.4);
+        }
+
+        .ffmpeg-log.show { display: block; }
+
+        .ffmpeg-log-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ffmpeg-log-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .ffmpeg-log-dot.red { background: #ff5f57; }
+        .ffmpeg-log-dot.yellow { background: #febc2e; }
+        .ffmpeg-log-dot.green { background: #28c840; }
+
+        .ffmpeg-log-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            margin-left: 4px;
+            letter-spacing: 0.04em;
+        }
+
+        .ffmpeg-log-body {
+            padding: 14px 16px;
+            max-height: 200px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        /* Custom scrollbar for log */
+        .ffmpeg-log-body::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .ffmpeg-log-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .ffmpeg-log-body::-webkit-scrollbar-thumb {
+            background: rgba(79, 110, 247, 0.3);
+            border-radius: 4px;
+        }
+
+        .ffmpeg-log-body::-webkit-scrollbar-thumb:hover {
+            background: rgba(79, 110, 247, 0.6);
+        }
+
+        .ffmpeg-log-line {
+            font-family: var(--font-mono);
+            font-size: 11.5px;
+            line-height: 1.8;
+            color: rgba(255,255,255,0.12);
+            white-space: pre-wrap;
+            word-break: break-all;
+            transition: color 0.2s;
+        }
+
+        .ffmpeg-log-line:last-child {
+            color: #4ade80;
+        }
+
+        .ffmpeg-log-line:nth-last-child(2) {
+            color: rgba(255,255,255,0.5);
+        }
+
+        .ffmpeg-log-line .ts {
+            color: rgba(79, 110, 247, 0.5);
+            margin-right: 4px;
+        }
+
+        /* ===== Buttons ===== */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.22s ease;
+            margin-top: 16px;
+            font-family: var(--font-ui);
+            letter-spacing: 0.02em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(79,110,247,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(79,110,247,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* Download button — prominent green */
+        .btn-success {
+            background: #16a34a;
+            color: #fff;
+            border: 1px solid rgba(34,197,94,0.3);
+            box-shadow: 0 4px 20px rgba(22, 163, 74, 0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+            font-size: 15px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-success::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), transparent);
+            pointer-events: none;
+        }
+
+        .btn-success:hover {
+            background: #15803d;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 32px rgba(22, 163, 74, 0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+
+        .btn-success:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: rgba(79,110,247,0.4);
+            color: var(--text-primary);
+            background: rgba(79,110,247,0.06);
+        }
+
+        .download-section {
+            display: none;
+        }
+
+        .download-section.show {
+            display: block;
+        }
+
+        /* Download section wrapper */
+        .download-section.show {
+            animation: fadeSlideIn 0.35s ease forwards;
+        }
+
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        input[type="file"] { display: none; }
+
+        /* Global scrollbar */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(79,110,247,0.3) transparent;
+        }
+
+        @media (max-width: 600px) {
+            .workspace { padding: 20px 16px; }
+            .title { font-size: 13px; }
+            .upload-area { padding: 40px 15px; }
+            .file-details { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="workspace">
+        <h1 class="title">🎬 WhatsApp HD Converter</h1>
+        
+        <!-- Upload Area -->
+        <div id="uploadArea" class="upload-area">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Drag & drop video atau klik untuk pilih</div>
+            <div class="upload-hint">MP4, MOV, AVI, MKV, WEBM, M4V (max 100MB)</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept="video/*">
+        
+        <!-- File Info -->
+        <div id="fileInfo" class="file-info">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-details">
+                <div class="detail-item">
+                    <div class="detail-label">Ukuran File</div>
+                    <div class="detail-value" id="fileSize">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Format</div>
+                    <div class="detail-value" id="fileFormat">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Video Info -->
+        <div id="videoInfo" class="video-info">
+            <div class="video-info-title">📊 Informasi Video</div>
+            <div class="video-info-grid">
+                <div class="video-info-item">Resolusi: <span id="videoResolution">-</span></div>
+                <div class="video-info-item">Durasi: <span id="videoDuration">-</span></div>
+                <div class="video-info-item">Bitrate: <span id="videoBitrate">-</span></div>
+                <div class="video-info-item">FPS: <span id="videoFps">-</span></div>
+            </div>
+        </div>
+        
+        <!-- Progress -->
+        <div id="progressContainer" class="progress-container">
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div id="progressText" class="progress-text">0%</div>
+        </div>
+        
+        <!-- FFmpeg Log -->
+        <div id="ffmpegLog" class="ffmpeg-log">
+            <div class="ffmpeg-log-header">
+                <div class="ffmpeg-log-dot red"></div>
+                <div class="ffmpeg-log-dot yellow"></div>
+                <div class="ffmpeg-log-dot green"></div>
+                <span class="ffmpeg-log-label">ffmpeg — process output</span>
+            </div>
+            <div class="ffmpeg-log-body" id="ffmpegLogContent"></div>
+        </div>
+        
+        <!-- Status Message -->
+        <div id="statusMessage" class="status-message"></div>
+        
+        <!-- Convert Button -->
+        <button id="convertBtn" class="btn btn-primary" disabled>
+            Pilih video terlebih dahulu
+        </button>
+        
+        <!-- Download Section -->
+        <div id="downloadSection" class="download-section">
+            <a id="downloadBtn" class="btn btn-success" download>
+                ⬇️ Download Video HD
+            </a>
+            <button id="convertAnother" class="btn btn-secondary">
+                Convert Video Lain
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const fileFormat = document.getElementById('fileFormat');
+        const videoInfo = document.getElementById('videoInfo');
+        const convertBtn = document.getElementById('convertBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const ffmpegLog = document.getElementById('ffmpegLog');
+        const ffmpegLogContent = document.getElementById('ffmpegLogContent');
+        const statusMessage = document.getElementById('statusMessage');
+        const downloadSection = document.getElementById('downloadSection');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const convertAnother = document.getElementById('convertAnother');
+        
+        // State
+        let selectedFile = null;
+        const MAX_FILE_SIZE = 100 * 1024 * 1024;
+        const ALLOWED_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'];
+        
+        // Upload Area Events
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        convertAnother.addEventListener('click', resetUpload);
+        
+        // File Handling
+        function handleFile(file) {
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            
+            if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
+                showStatus('Format tidak didukung! Gunakan: MP4, MOV, AVI, MKV, WEBM, M4V', 'error');
+                return;
+            }
+            
+            if (file.size > MAX_FILE_SIZE) {
+                showStatus('File terlalu besar! Maksimal 100MB', 'error');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Update UI
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileFormat.textContent = fileExtension.toUpperCase();
+            fileInfo.classList.add('show');
+            uploadArea.style.display = 'none';
+            
+            // Get video info
+            getVideoInfo(file);
+            
+            // Enable convert button
+            convertBtn.disabled = false;
+            convertBtn.textContent = '⚡ Convert ke HD';
+            
+            // Hide previous results
+            downloadSection.classList.remove('show');
+            statusMessage.classList.remove('show');
+            progressContainer.classList.remove('show');
+            ffmpegLog.classList.remove('show');
+        }
+        
+        function getVideoInfo(file) {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            
+            video.onloadedmetadata = function() {
+                window.URL.revokeObjectURL(video.src);
+                
+                const duration = Math.round(video.duration);
+                const width = video.videoWidth;
+                const height = video.videoHeight;
+                
+                document.getElementById('videoResolution').textContent = `${width}x${height}`;
+                document.getElementById('videoDuration').textContent = `${duration}s`;
+                document.getElementById('videoBitrate').textContent = formatBitrate(file.size, duration);
+                document.getElementById('videoFps').textContent = '30fps (est)';
+                
+                videoInfo.classList.add('show');
+            };
+            
+            video.src = URL.createObjectURL(file);
+        }
+        
+        function resetUpload() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            videoInfo.classList.remove('show');
+            uploadArea.style.display = 'block';
+            convertBtn.disabled = true;
+            convertBtn.textContent = 'Pilih video terlebih dahulu';
+            downloadSection.classList.remove('show');
+            statusMessage.classList.remove('show');
+            progressContainer.classList.remove('show');
+            ffmpegLog.classList.remove('show');
+            ffmpegLogContent.innerHTML = '';
+        }
+        
+        // Convert Button
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            convertBtn.disabled = true;
+            progressContainer.classList.add('show');
+            ffmpegLog.classList.add('show');
+            statusMessage.classList.remove('show');
+            downloadSection.classList.remove('show');
+            
+            updateProgress(0, 'Memulai konversi...');
+            addFFmpegLog('Starting conversion process...');
+            
+            const formData = new FormData();
+            formData.append('video', selectedFile);
+            
+            try {
+                updateProgress(10, 'Uploading video...');
+                addFFmpegLog(`Uploading ${selectedFile.name}...`);
+                
+                console.log('Sending request to /convert...');
+                
+                // Start FFmpeg progress simulation
+                const progressSimulation = simulateFFmpegProgress();
+                
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response received:', response.status);
+                
+                // Wait for simulation to complete
+                await progressSimulation;
+                
+                if (!response.ok) {
+                    let errorMessage = 'Conversion failed';
+                    try {
+                        const error = await response.json();
+                        errorMessage = error.error || errorMessage;
+                    } catch (e) {
+                        errorMessage = `Server error: ${response.status}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                updateProgress(90, 'Finalizing...');
+                addFFmpegLog('Finalizing output file...');
+                
+                const result = await response.json();
+                console.log('Result:', result);
+                
+                if (result.success) {
+                    // Set download URL
+                    downloadBtn.href = result.download_url;
+                    downloadBtn.download = `whatsapp_hd_${result.file_id}.mp4`;
+                    
+                    updateProgress(100, 'Selesai!');
+                    addFFmpegLog('Conversion completed successfully!');
+                    addFFmpegLog(`Output size: ${formatFileSize(result.output_size)}`);
+                    
+                    showStatus('✅ Konversi berhasil! Video siap didownload.', 'success');
+                    downloadSection.classList.add('show');
+                } else {
+                    throw new Error(result.error || 'Conversion failed');
+                }
+                
+            } catch (error) {
+                console.error('Conversion error:', error);
+                showStatus('❌ Error: ' + error.message, 'error');
+                addFFmpegLog('ERROR: ' + error.message);
+                convertBtn.disabled = false;
+                progressContainer.classList.remove('show');
+            }
+        });
+        
+        async function simulateFFmpegProgress() {
+            updateProgress(20, 'Processing dengan FFmpeg...');
+            addFFmpegLog('FFmpeg processing started...');
+            addFFmpegLog('Codec: H.264, Resolution: 1080p, Bitrate: 5000k');
+            
+            const steps = [
+                { progress: 30, message: 'Analyzing input video...' },
+                { progress: 40, message: 'Encoding video stream...' },
+                { progress: 50, message: 'Processing frame 100/900...' },
+                { progress: 60, message: 'Processing frame 300/900...' },
+                { progress: 70, message: 'Processing frame 600/900...' },
+                { progress: 75, message: 'Processing frame 750/900...' },
+                { progress: 80, message: 'Encoding audio stream...' },
+                { progress: 85, message: 'Muxing streams...' }
+            ];
+            
+            for (const step of steps) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                updateProgress(step.progress, step.message);
+                addFFmpegLog(step.message);
+            }
+        }
+        
+        function updateProgress(percent, message) {
+            progressFill.style.width = percent + '%';
+            progressText.textContent = message || percent + '%';
+        }
+        
+        function addFFmpegLog(message) {
+            const line = document.createElement('div');
+            line.className = 'ffmpeg-log-line';
+            const ts = new Date().toLocaleTimeString();
+            line.innerHTML = `<span class="ts">[${ts}]</span> ${message}`;
+            ffmpegLogContent.appendChild(line);
+            ffmpegLogContent.scrollTop = ffmpegLogContent.scrollHeight;
+        }
+        
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = 'status-message show ' + type;
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        function formatBitrate(bytes, duration) {
+            if (duration === 0) return '-';
+            const bitrate = (bytes * 8) / duration / 1000;
+            return Math.round(bitrate) + ' kbps';
+        }
+    </script>
+</body>
+</html>

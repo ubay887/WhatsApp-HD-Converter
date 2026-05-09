@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: whatsapp-hd-converter
+    env: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: PYTHON_VERSION
+        value: 3.12.0
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:${PORT:-8080} --timeout 300 --workers 2 --log-level info

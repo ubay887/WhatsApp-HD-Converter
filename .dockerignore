@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Documentation
+*.md
+!README.md
+DOCS_INDEX.md
+CHANGELOG*.md
+DEPLOYMENT.md
+CLEANUP_SYSTEM.md
+FIX_FFMPEG_ERROR.md
+QUICK_START.txt
+START_HERE.md
+UI_*.md
+WINDOWS_SETUP.md
+CHECKLIST.md
+
+# Test files
+test_*.py
+test_*.html
+
+# Batch files
+*.bat
+
+# Temp files
+*.log
+*.tmp
+temp/
+uploads/
+outputs/
