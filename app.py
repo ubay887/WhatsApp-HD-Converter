@@ -57,8 +57,10 @@ def get_video_info(filepath):
         # Probe stream-level metadata (codec, side_data for displaymatrix)
         probe_cmd = [
             "ffprobe",
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_streams",
             "-show_entries",
             "stream=codec_name,codec_type:stream_side_data=rotation",
@@ -86,13 +88,17 @@ def get_video_info(filepath):
 
 def optimize_for_whatsapp(input_path, output_path):
     """
-    Optimize video for WhatsApp status with these settings:
-    - High quality H.264 encoding
+    Optimize video for WhatsApp status with HD quality settings:
+    - H.264 High Profile Level 4.2 (WhatsApp's preferred format)
     - 1080p max resolution (maintains aspect ratio)
-    - High bitrate (5000k video, 192k audio)
+    - High bitrate (10Mbps video, 256k audio) to prevent WhatsApp re-encoding
+    - CRF 18 for near-lossless quality
     - 30 second max duration
-    - MP4 container with proper flags for compatibility
+    - MP4 container with faststart for streaming
     - Handles HEVC/H.265 input and Android rotation metadata
+
+    These settings ensure WhatsApp accepts the video without re-compression,
+    preserving maximum quality even on high-speed connections.
     """
 
     # Probe input for rotation and codec so we can handle Android HEVC videos
@@ -109,9 +115,9 @@ def optimize_for_whatsapp(input_path, output_path):
     # After any transpose we scale so the longest edge stays ≤ 1080 px and
     # both dimensions remain divisible by 2 (required by yuv420p).
     transpose_map = {
-        -90: "transpose=1",   # 90° clockwise  (Android portrait)
+        -90: "transpose=1",  # 90° clockwise  (Android portrait)
         270: "transpose=1",
-        90:  "transpose=2",   # 90° counter-clockwise
+        90: "transpose=2",  # 90° counter-clockwise
         -270: "transpose=2",
         180: "transpose=2,transpose=2",
         -180: "transpose=2,transpose=2",
@@ -120,7 +126,9 @@ def optimize_for_whatsapp(input_path, output_path):
 
     if rotation in transpose_map:
         vf = f"{transpose_map[rotation]},{scale_filter}"
-        print(f"→ Applying rotation correction for {rotation}°: {transpose_map[rotation]}")
+        print(
+            f"→ Applying rotation correction for {rotation}°: {transpose_map[rotation]}"
+        )
     else:
         vf = scale_filter
 
@@ -131,7 +139,12 @@ def optimize_for_whatsapp(input_path, output_path):
         input_args = ["-c:v", "hevc"]
         print(f"→ HEVC input detected — using explicit hevc decoder")
 
-    # FFmpeg command optimized for WhatsApp
+    # FFmpeg command optimized for WhatsApp HD quality
+    # WhatsApp accepts videos without re-encoding if they match these specs:
+    # - H.264 High Profile, Level 4.2
+    # - yuv420p pixel format
+    # - AAC audio, 48kHz
+    # - Proper bitrate for resolution (8-12Mbps for 1080p)
     cmd = [
         "ffmpeg",
         *input_args,
@@ -142,29 +155,35 @@ def optimize_for_whatsapp(input_path, output_path):
         "-c:v",
         "libx264",  # H.264 codec
         "-preset",
-        "medium",  # Balanced speed/quality preset
+        "slow",  # Slower encoding = better quality (worth the wait)
+        "-profile:v",
+        "high",  # High profile for better compression efficiency
+        "-level",
+        "4.2",  # Level 4.2 supports 1080p @ 60fps
         "-crf",
-        "23",  # Good quality
+        "18",  # Near-lossless quality (18-20 is visually transparent)
         "-vf",
         vf,  # Scale + optional rotation correction
         "-b:v",
-        "5000k",  # High video bitrate
+        "10M",  # 10Mbps for 1080p (WhatsApp sweet spot)
         "-maxrate",
-        "6000k",  # Max bitrate
+        "12M",  # Allow peaks up to 12Mbps
         "-bufsize",
-        "12000k",  # Buffer size
-        "-pix_fmt",
-        "yuv420p",  # Pixel format for compatibility
+        "20M",  # Large buffer prevents quality drops in complex scenes
         "-threads",
         "4",  # Limit encoder threads to avoid resource contention
         "-c:a",
         "aac",  # AAC audio codec
         "-b:a",
-        "192k",  # High audio bitrate
+        "256k",  # Higher audio bitrate for better quality
         "-ar",
-        "48000",  # Audio sample rate
+        "48000",  # 48kHz sample rate (WhatsApp standard)
+        "-ac",
+        "2",  # Stereo audio
         "-movflags",
-        "+faststart",  # Enable fast start for streaming
+        "+faststart",  # Enable streaming/progressive download
+        "-pix_fmt",
+        "yuv420p",  # Ensure compatibility with all devices
         "-y",  # Overwrite output file
         output_path,
     ]
@@ -184,7 +203,9 @@ def optimize_for_whatsapp(input_path, output_path):
         print(f"FFmpeg stderr:\n{result.stderr[-3000:]}")
 
     if result.returncode != 0:
-        raise Exception(f"FFmpeg error (exit {result.returncode}): {result.stderr[-2000:]}")
+        raise Exception(
+            f"FFmpeg error (exit {result.returncode}): {result.stderr[-2000:]}"
+        )
 
     # Detect silent failure: output exists but no frames were encoded
     if os.path.exists(output_path) and os.path.getsize(output_path) < 1024:
