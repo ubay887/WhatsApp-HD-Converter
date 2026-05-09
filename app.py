@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 import subprocess
 import uuid
+import json
 from datetime import datetime
 import time
 
@@ -44,13 +45,43 @@ def allowed_file(filename):
 
 
 def get_video_info(filepath):
-    """Get video metadata using ffprobe - simplified version"""
-    # Skip ffprobe check - just verify file exists and is readable
+    """Get video metadata using ffprobe, including rotation detection."""
     if not os.path.exists(filepath):
         raise Exception("Video file not found")
     if os.path.getsize(filepath) == 0:
         raise Exception("Video file is empty")
-    return {"valid": True}
+
+    info = {"valid": True, "rotation": 0, "codec": None}
+
+    try:
+        # Probe stream-level metadata (codec, side_data for displaymatrix)
+        probe_cmd = [
+            "ffprobe",
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_streams",
+            "-show_entries",
+            "stream=codec_name,codec_type:stream_side_data=rotation",
+            filepath,
+        ]
+        probe_result = subprocess.run(
+            probe_cmd, capture_output=True, text=True, timeout=15
+        )
+        if probe_result.returncode == 0:
+            probe_data = json.loads(probe_result.stdout)
+            for stream in probe_data.get("streams", []):
+                if stream.get("codec_type") == "video":
+                    info["codec"] = stream.get("codec_name")
+                    # displaymatrix rotation is exposed as side_data
+                    for sd in stream.get("side_data_list", []):
+                        if "rotation" in sd:
+                            info["rotation"] = int(sd["rotation"])
+                    break
+    except Exception as probe_err:
+        # ffprobe failure is non-fatal; fall back to safe defaults
+        print(f"Warning: ffprobe metadata check failed: {probe_err}")
+
+    return info
 
 
 def optimize_for_whatsapp(input_path, output_path):
@@ -61,11 +92,49 @@ def optimize_for_whatsapp(input_path, output_path):
     - High bitrate (5000k video, 192k audio)
     - 30 second max duration
     - MP4 container with proper flags for compatibility
+    - Handles HEVC/H.265 input and Android rotation metadata
     """
+
+    # Probe input for rotation and codec so we can handle Android HEVC videos
+    try:
+        video_meta = get_video_info(input_path)
+    except Exception:
+        video_meta = {"valid": True, "rotation": 0, "codec": None}
+
+    rotation = video_meta.get("rotation", 0)
+    input_codec = video_meta.get("codec") or ""
+
+    # Build the video filter chain.
+    # `transpose` corrects displaymatrix rotation that some decoders ignore.
+    # After any transpose we scale so the longest edge stays ≤ 1080 px and
+    # both dimensions remain divisible by 2 (required by yuv420p).
+    transpose_map = {
+        -90: "transpose=1",   # 90° clockwise  (Android portrait)
+        270: "transpose=1",
+        90:  "transpose=2",   # 90° counter-clockwise
+        -270: "transpose=2",
+        180: "transpose=2,transpose=2",
+        -180: "transpose=2,transpose=2",
+    }
+    scale_filter = "scale='if(gte(iw,ih),min(1080,iw),-2)':'if(gte(iw,ih),-2,min(1080,ih))':flags=lanczos"
+
+    if rotation in transpose_map:
+        vf = f"{transpose_map[rotation]},{scale_filter}"
+        print(f"→ Applying rotation correction for {rotation}°: {transpose_map[rotation]}")
+    else:
+        vf = scale_filter
+
+    # For HEVC/H.265 input, explicitly set the decoder so FFmpeg does not
+    # silently fall back to a slower or broken path.
+    input_args = []
+    if input_codec.lower() in ("hevc", "h265"):
+        input_args = ["-c:v", "hevc"]
+        print(f"→ HEVC input detected — using explicit hevc decoder")
 
     # FFmpeg command optimized for WhatsApp
     cmd = [
         "ffmpeg",
+        *input_args,
         "-i",
         input_path,
         "-t",
@@ -73,11 +142,11 @@ def optimize_for_whatsapp(input_path, output_path):
         "-c:v",
         "libx264",  # H.264 codec
         "-preset",
-        "medium",  # Medium preset for faster encoding
+        "medium",  # Balanced speed/quality preset
         "-crf",
         "23",  # Good quality
         "-vf",
-        "scale='min(1080,iw)':-2:flags=lanczos",  # Scale to max 1080p width
+        vf,  # Scale + optional rotation correction
         "-b:v",
         "5000k",  # High video bitrate
         "-maxrate",
@@ -86,6 +155,8 @@ def optimize_for_whatsapp(input_path, output_path):
         "12000k",  # Buffer size
         "-pix_fmt",
         "yuv420p",  # Pixel format for compatibility
+        "-threads",
+        "4",  # Limit encoder threads to avoid resource contention
         "-c:a",
         "aac",  # AAC audio codec
         "-b:a",
@@ -98,6 +169,8 @@ def optimize_for_whatsapp(input_path, output_path):
         output_path,
     ]
 
+    print(f"→ FFmpeg command: {' '.join(cmd)}")
+
     # Run FFmpeg with timeout
     result = subprocess.run(
         cmd,
@@ -106,8 +179,20 @@ def optimize_for_whatsapp(input_path, output_path):
         timeout=120,  # 2 minute timeout
     )
 
+    # Always log stderr so frame=0 / early-exit issues are visible in logs
+    if result.stderr:
+        print(f"FFmpeg stderr:\n{result.stderr[-3000:]}")
+
     if result.returncode != 0:
-        raise Exception(f"FFmpeg error: {result.stderr}")
+        raise Exception(f"FFmpeg error (exit {result.returncode}): {result.stderr[-2000:]}")
+
+    # Detect silent failure: output exists but no frames were encoded
+    if os.path.exists(output_path) and os.path.getsize(output_path) < 1024:
+        raise Exception(
+            "FFmpeg produced an unexpectedly small output file — "
+            "encoding may have stalled (frame=0). "
+            f"FFmpeg stderr: {result.stderr[-1000:]}"
+        )
 
     return result
 
